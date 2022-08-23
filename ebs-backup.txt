@@ -1,0 +1,91 @@
+EBS-BACKUP(1)		NetBSD General Commands Manual		 EBS-BACKUP(1)
+
+NAME
+     ebs-backup -- back up a file/directory into an Elastic Block Storage (EBS) volume
+
+SYNOPSIS
+     ebs-backup [-h] [-k keyname] [-v] path
+
+DESCRIPTION
+     The ebs-backup utility backs up a given file or directory into an Amazon
+     Web Services (AWS) Elastic Block Storage (EBS) volume. For each backup,
+     a new Amazon Elastic Cloud Compute (EC2) instance is created in the region
+     configured by the aws-cli tool or the user. Then a new EBS volume is
+     created in the same availability zone as the instance, attached to that
+     instance and then ultimately transferring the backup to that volume.
+
+OPTIONS
+     ebs-backup accepts the following command-line flags:
+
+     -h        , --help		       Print a usage statement and exit.
+
+     -k keyname, --keyname	       Use the given keyname instead of the default (ebs-backup).
+
+     -v        , --verbose         Enable verbose logging.
+
+DETAILS
+     ebs-backup will back up a given file or directory by creating a new
+     Amazon Elastic Cloud Compute (EC2) instance in the region configured
+     by the user, creating a new Elastic Block Storage (EBS) volume of
+     twice the size of the directory to be backed up rounded to the nearest
+     gigabyte (GB) in the same availability zone as the instance, attaching
+     the volume to the instance, using tar(1) on the host to create an
+     archive, ssh(1) to connect to the newly created instance for the backup
+     and dd(1) to write the archive directly to the EBS volume. At it's core,
+     ebs-backup does the following:
+
+        tar -c -f - <path> | ssh user@ec2-instance dd of=/dev/xbd1
+
+     where 'user' is the user account on the remote instance, 'ec2-instance'
+     is the remote instance and /dev/xbd1 is the identifier of the EBS volume
+     attached to the remote instance which may be different depending on the
+     instance types and operating system.
+
+     An important thing to note here is that ebs-backup does involve the use
+     of creating any temporary intermediate files for backup. The output of
+     tar(1) is directly piped to dd(1) on the remote instance which means
+     that no local copies are created of the backup.
+
+     Another thing to note is that when dealing with symbolic links, ebs-backup
+     does not copy the linked file but only the link itself.
+
+     At the end of the backup process, ebs-backup will terminate the EC2
+     instance created to perform the backup. ebs-backup will create a
+     suitable security group if it does not find one that exists.
+
+OUTPUT
+     Once ebs-backup completes its processes, it will simply output the id
+     of the volume that the backup has been performed to, to STDOUT.
+
+ENVIRONMENT
+     ebs-backup assumes the following:
+
+        1. The user has an environment set up for use with the AWS CLI,
+           either using 'aws configure' or other methods.
+        2. ssh(1) is set up as a part of the environment and a key
+           'ebs-backup.pem' exists under ~/.ssh. This default key name
+           can be changed using the command line flags with the assumption
+           that the key permissions have been set according to what AWS
+           requires and the file has an extension '.pem'.
+        3. No changes have been made to ~/.ssh/config that may interfere
+           while connecting to EC2 instances.
+        4. The user has the appropriate permissions for the files and
+           directories to be backed up.
+
+EXIT STATUS
+     If ebs-backup performs the backup successfully, it exits with status
+     code 0, else it exits with some other status code in case of an error.
+
+EXAMPLES
+     To back up a single file called 'test.txt' under the home directory:
+
+	   $ python ebs-backup test.txt
+
+
+	 To back up a directory called 'documents' under the home directory:
+
+	   $ python ebs-backup ~/documents
+
+     To back up the entire file system:
+
+       $ python ebs-backup ~/documents
